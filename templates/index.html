@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מתנסים תל אביב – לוחות שעות</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:#1a1a2e;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── TOPBAR ── */
+.topbar{background:#0d47a1;color:#fff;padding:0 20px;height:56px;display:flex;align-items:center;gap:20px;box-shadow:0 2px 6px rgba(0,0,0,.35);flex-shrink:0;z-index:20}
+.topbar h1{font-size:1.2rem;font-weight:800;white-space:nowrap;letter-spacing:-.01em}
+.search-wrap{flex:1;max-width:500px;position:relative;display:flex;align-items:center}
+.search-wrap input{width:100%;padding:8px 38px 8px 36px;border:none;border-radius:24px;background:rgba(255,255,255,.18);color:#fff;font-size:.95rem;direction:rtl;outline:none;transition:background .2s}
+.search-wrap input::placeholder{color:rgba(255,255,255,.6)}
+.search-wrap input:focus{background:rgba(255,255,255,.28)}
+.s-icon{position:absolute;right:12px;opacity:.7;pointer-events:none;font-size:1rem}
+.s-clear{position:absolute;left:10px;background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:1rem;display:none;line-height:1;padding:4px}
+.topbar-stat{font-size:.78rem;opacity:.65;white-space:nowrap}
+.map-btn{padding:6px 14px;border:1.5px solid rgba(255,255,255,.6);border-radius:20px;background:none;cursor:pointer;font-size:.82rem;color:#fff;font-weight:700;white-space:nowrap;transition:background .15s}
+.map-btn:hover,.map-btn.active{background:rgba(255,255,255,.2);border-color:#fff}
+
+/* ── MAP ── */
+#mapWrap{flex:1;display:none;flex-direction:column;overflow:hidden}
+#mapWrap.visible{display:flex}
+#mapContainer{flex:1;z-index:1}
+.map-hint{padding:8px 16px;background:#e8f0fe;font-size:.82rem;color:#0d47a1;font-weight:600;flex-shrink:0;border-bottom:1px solid #c5cae9}
+/* Leaflet popup RTL */
+.leaflet-popup-content{direction:rtl;text-align:right;min-width:160px}
+.popup-name{font-weight:700;font-size:.95rem;margin-bottom:4px}
+.popup-count{font-size:.82rem;color:#555;margin-bottom:8px}
+.popup-btn{display:block;width:100%;padding:6px 10px;background:#0d47a1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:700}
+.popup-btn:hover{background:#1565c0}
+
+/* ── LAYOUT ── */
+.app{display:flex;flex:1;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:220px;flex-shrink:0;background:#fff;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden}
+.sidebar-head{padding:10px 14px;font-size:.75rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #eee;background:#fafafa;flex-shrink:0}
+.matnas-list{flex:1;overflow-y:auto}
+.matnas-item{padding:9px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5;font-size:.86rem;transition:background .12s;gap:6px}
+.matnas-item:hover{background:#e8f0fe}
+.matnas-item.active{background:#0d47a1;color:#fff}
+.matnas-item.active .badge{background:rgba(255,255,255,.25);color:#fff}
+.m-name{flex:1;line-height:1.3}
+.badge{background:#e8eaf6;color:#3949ab;border-radius:10px;font-size:.7rem;font-weight:700;padding:1px 7px;white-space:nowrap}
+
+/* ── MAIN ── */
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── LOADING ── */
+.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#888;gap:16px;font-size:1rem}
+.spinner{width:38px;height:38px;border:3px solid #ddd;border-top-color:#0d47a1;border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── TIMETABLE OUTER ── */
+.tt-outer{flex:1;overflow:auto;padding:20px}
+.tt-header{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.tt-title{font-size:1.4rem;font-weight:800;color:#0d47a1}
+.tt-sub{font-size:.85rem;color:#999}
+.view-toggle{margin-right:auto;display:flex;gap:6px}
+.vbtn{padding:5px 14px;border:1.5px solid #0d47a1;border-radius:20px;background:none;cursor:pointer;font-size:.8rem;color:#0d47a1;font-weight:700;transition:background .15s}
+.vbtn.active{background:#0d47a1;color:#fff}
+
+/* ── GRID ── */
+.grid-scroll{overflow-x:auto;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.grid-wrap{display:flex;min-width:600px;background:#fff;overflow:hidden;border-radius:10px}
+.time-axis{width:52px;flex-shrink:0;border-left:1px solid #e8e8e8}
+.time-axis-head{height:48px;background:#fafafa;border-bottom:1px solid #e8e8e8}
+.t-slot{height:64px;display:flex;align-items:flex-start;justify-content:flex-end;padding:4px 6px 0 0;font-size:.68rem;color:#ccc;user-select:none}
+.days-area{flex:1;display:flex;min-width:0}
+.day-col{flex:1;min-width:105px;border-right:1px solid #f0f0f0;display:flex;flex-direction:column}
+.day-col:last-child{border-right:none}
+.day-head{height:48px;text-align:center;padding:4px;background:#fafafa;border-bottom:1px solid #e8e8e8;display:flex;flex-direction:column;justify-content:center}
+.day-name{font-size:.88rem;font-weight:700;color:#0d47a1}
+.day-cnt{font-size:.68rem;color:#bbb;margin-top:1px}
+.day-body{position:relative;height:960px} /* 15h×64px */
+.h-line{position:absolute;left:0;right:0;border-top:1px solid #f5f5f5}
+.h-line-major{border-top-color:#e8e8e8}
+
+/* ── ACTIVITY CARD (grid) ── */
+.ac{position:absolute;border-radius:5px;padding:4px 6px;cursor:pointer;overflow:hidden;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:box-shadow .15s,opacity .15s}
+.ac:hover{box-shadow:0 3px 10px rgba(0,0,0,.3);z-index:5;opacity:.92}
+.ac-name{font-weight:700;font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px;line-height:1.2}
+.ac-time{font-size:.68rem;opacity:.9}
+.ac-spots{font-size:.66rem;margin-top:2px}
+
+/* ── LIST VIEW ── */
+.day-section{margin-bottom:22px}
+.day-section h3{font-size:.95rem;font-weight:700;color:#0d47a1;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e8f0fe}
+.list-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.lcard{background:#fff;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-right:5px solid #ccc;cursor:pointer;transition:box-shadow .15s}
+.lcard:hover{box-shadow:0 3px 10px rgba(0,0,0,.15)}
+.lcard-name{font-weight:700;font-size:.92rem;margin-bottom:4px;line-height:1.3}
+.lcard-meta{font-size:.78rem;color:#666;margin-bottom:2px}
+.lcard-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:.8rem}
+.lcard-price{font-weight:700;color:#0d47a1}
+
+/* ── NO-TIME ── */
+.no-time-wrap{margin-top:24px}
+.no-time-wrap h3{font-size:.85rem;color:#aaa;margin-bottom:10px}
+.nt-chips{display:flex;flex-wrap:wrap;gap:8px}
+.nt-chip{background:#fff;border-radius:20px;padding:5px 12px;font-size:.78rem;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;border:1.5px solid transparent;transition:border-color .15s}
+.nt-chip:hover{border-color:#0d47a1}
+
+/* ── SEARCH RESULTS ── */
+.search-outer{flex:1;overflow-y:auto;padding:20px}
+.search-heading{font-size:.95rem;font-weight:600;color:#666;margin-bottom:16px}
+.rcard{background:#fff;border-radius:8px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-right:5px solid #ccc;cursor:pointer;transition:box-shadow .15s;display:flex;gap:14px;align-items:flex-start}
+.rcard:hover{box-shadow:0 3px 10px rgba(0,0,0,.15)}
+.rcard-body{flex:1;min-width:0}
+.rc-name{font-size:1rem;font-weight:700;margin-bottom:4px}
+.rc-matnas{font-size:.8rem;color:#0d47a1;font-weight:600;margin-bottom:3px}
+.rc-meta{font-size:.8rem;color:#666;margin-bottom:3px}
+.rc-foot{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:.8rem;flex-wrap:wrap}
+.rc-price{font-size:.95rem;font-weight:700;color:#0d47a1;white-space:nowrap}
+
+/* ── SPOTS ── */
+.s-ok{color:#2e7d32;font-weight:600}
+.s-low{color:#e65100;font-weight:600}
+.s-full{color:#c62828;font-weight:600}
+
+/* ── CAT BADGE ── */
+.cat-badge{font-size:.7rem;color:#fff;padding:2px 8px;border-radius:10px;font-weight:700;display:inline-block}
+
+/* ── DETAIL MODAL ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.detail{background:#fff;border-radius:14px;padding:28px;max-width:460px;width:92%;max-height:82vh;overflow-y:auto;box-shadow:0 8px 36px rgba(0,0,0,.3);position:relative;direction:rtl}
+.d-close{position:absolute;top:12px;left:14px;background:none;border:none;font-size:1.5rem;cursor:pointer;color:#bbb;line-height:1;transition:color .15s}
+.d-close:hover{color:#555}
+.d-cat{display:inline-block;margin-bottom:10px}
+.d-title{font-size:1.3rem;font-weight:800;margin-bottom:4px;padding-left:28px;line-height:1.3}
+.d-matnas{font-size:.88rem;color:#0d47a1;font-weight:600;margin-bottom:16px}
+.d-row{display:flex;gap:8px;margin-bottom:9px;font-size:.86rem;align-items:flex-start}
+.d-label{color:#aaa;min-width:72px;flex-shrink:0;padding-top:1px}
+.d-val{font-weight:600;color:#222;line-height:1.4}
+.d-details{font-size:.82rem;color:#666;margin-top:14px;line-height:1.65;border-top:1px solid #f0f0f0;padding-top:12px}
+.d-reg-btn{display:block;margin-top:16px;text-align:center;background:#0d47a1;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:.9rem;font-weight:700;cursor:pointer;width:100%}
+.d-reg-btn:hover{background:#1565c0}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:60px 20px;color:#ccc}
+.empty-icon{font-size:3rem;margin-bottom:12px}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:3px}
+
+mark{background:#fff176;border-radius:2px;padding:0 1px}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <h1>🗓 מתנסים תל"א</h1>
+  <div class="search-wrap">
+    <span class="s-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="חיפוש לפי שם שיעור, מדריך, קטגוריה..." autocomplete="off" spellcheck="false">
+    <button class="s-clear" id="clearBtn" title="נקה חיפוש">✕</button>
+  </div>
+  <button class="map-btn" id="mapToggle" onclick="toggleMapMode()">🗺 מפה</button>
+  <span class="topbar-stat" id="stat">טוען...</span>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-head" id="sidebarHead">מתנסים</div>
+    <div class="matnas-list" id="matnasList">
+      <div class="loading" style="height:180px;font-size:.85rem"><div class="spinner"></div></div>
+    </div>
+  </aside>
+
+  <!-- MAP (global, replaces main when active) -->
+  <div id="mapWrap">
+    <div class="map-hint">לחץ על מרכז קהילתי לבחירתו ומעבר ללוח השעות שלו</div>
+    <div id="mapContainer"></div>
+  </div>
+
+  <!-- MAIN AREA -->
+  <main class="main" id="main">
+    <div class="loading" id="globalLoading">
+      <div class="spinner"></div>
+      <span>טוען נתונים מעיריית ת"א...</span>
+    </div>
+  </main>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay" id="overlay" onclick="closeDetail(event)">
+  <div class="detail" id="detail">
+    <button class="d-close" onclick="closeDetail()">×</button>
+    <div class="d-cat"><span class="cat-badge" id="dCat"></span></div>
+    <div class="d-title" id="dTitle"></div>
+    <div class="d-matnas" id="dMatnas"></div>
+    <div id="dRows"></div>
+    <div class="d-details" id="dDetails" style="display:none"></div>
+    <button class="d-reg-btn" id="dReg" style="display:none" onclick="openReg()">לרישום באתר העירייה ←</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════
+const HOUR_H  = 64;          // pixels per hour in the grid
+const MIN_H   = 7;           // grid starts at 07:00
+const MAX_H   = 22;          // grid ends at 22:00
+const GRID_H  = (MAX_H - MIN_H) * HOUR_H;  // 960px
+
+const DAYS = [
+  {idx:1, name:'ראשון'},
+  {idx:2, name:'שני'},
+  {idx:3, name:'שלישי'},
+  {idx:4, name:'רביעי'},
+  {idx:5, name:'חמישי'},
+  {idx:6, name:'שישי'},
+];
+
+const CAT_COLOR = {
+  'התעמלות וכושר':'#388e3c','כושר':'#43a047','ספורט':'#c62828',
+  'מחול ותנועה':'#ad1457','אמנות ומלאכת יד':'#e65100',
+  'מדע וטכנולוגיה':'#1565c0','שפות ורוח':'#6a1b9a',
+  'אמנויות לחימה':'#5d4037','אוכל':'#bf360c',
+  'מועדונים':'#00838f','חינוך והורות':'#546e7a',
+  'משחקי חשיבה':'#f57f17','סדנה':'#616161',
+};
+const color = cat => CAT_COLOR[cat] || '#78909c';
+
+// ═══════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════
+let ALL   = [];          // all normalised activities
+let IDX   = {};          // code → activity
+let selectedMatnas = null;
+let viewMode = 'grid';   // 'grid' | 'list'
+let currentDetailCode = null;
+
+// ═══════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════
+const toMin = t => { if(!t)return 0; const[h,m]=t.split(':').map(Number); return h*60+(m||0); };
+const toY   = t => (toMin(t) - MIN_H*60) * HOUR_H / 60;
+const durH  = (f,t) => { if(!f||!t)return HOUR_H; return Math.max((toMin(t)-toMin(f))*HOUR_H/60, 24); };
+
+function fmtPrice(p) {
+  if (p===''||p===null||p===undefined) return '';
+  if (typeof p==='number') return p===0 ? 'חינם' : p.toFixed(0)+'₪';
+  return p+'₪';
+}
+
+function spotsEl(av, total, prefix='') {
+  if (av===''||av===null||av===undefined) return '';
+  if (av===0) return `<span class="s-full">${prefix}אין מקומות</span>`;
+  const pct = (typeof total==='number'&&total>0) ? av/total : 1;
+  if (pct <= 0.25) return `<span class="s-low">${prefix}${av} מקומות (נגמר!)</span>`;
+  return `<span class="s-ok">${prefix}${av} מקומות פנויים</span>`;
+}
+
+function fmtTimes(times) {
+  if (!times||!times.length) return '';
+  return times.map(t=>`${t.day_name} ${t.from}–${t.to}`).join(' | ');
+}
+
+const esc = s => (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function hl(text, q) {
+  if (!q||!text) return esc(text||'');
+  const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return esc(text).replace(re,'<mark>$1</mark>');
+}
+
+// ═══════════════════════════════════════════════
+//  FETCH
+// ═══════════════════════════════════════════════
+async function init() {
+  try {
+    const res = await fetch('/api/activities');
+    ALL = await res.json();
+    ALL.forEach(a => IDX[a.code] = a);
+    document.getElementById('stat').textContent = `${ALL.length} פעילויות`;
+    buildSidebar();
+    const names = getMatnasList();
+    if (names.length) selectMatnas(names[0].name);
+  } catch(e) {
+    document.getElementById('globalLoading').innerHTML =
+      '<span style="color:#c62828">שגיאה בטעינת הנתונים — נסה לרענן</span>';
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  SIDEBAR
+// ═══════════════════════════════════════════════
+function getMatnasList() {
+  const m={};
+  ALL.forEach(a=>{ if(a.matnas) m[a.matnas]=(m[a.matnas]||0)+1; });
+  return Object.entries(m)
+    .sort((a,b)=>a[0].localeCompare(b[0],'he'))
+    .map(([name,count])=>({name,count}));
+}
+
+function buildSidebar() {
+  const list = getMatnasList();
+  document.getElementById('sidebarHead').textContent = `מתנסים (${list.length})`;
+  document.getElementById('matnasList').innerHTML = list.map(({name,count}) =>
+    `<div class="matnas-item" data-name="${esc(name)}" onclick="selectMatnas(this.dataset.name)">
+      <span class="m-name">${esc(name)}</span>
+      <span class="badge">${count}</span>
+    </div>`
+  ).join('');
+}
+
+function selectMatnas(name) {
+  selectedMatnas = name;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.querySelectorAll('.matnas-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.name === name)
+  );
+  renderTimetable();
+}
+
+// ═══════════════════════════════════════════════
+//  TIMETABLE CONTAINER
+// ═══════════════════════════════════════════════
+function renderTimetable() {
+  const acts = ALL.filter(a => a.matnas === selectedMatnas);
+  const withT = acts.filter(a => a.times && a.times.length);
+  const noT   = acts.filter(a => !a.times || !a.times.length);
+
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="tt-outer" id="ttOuter">
+      <div class="tt-header">
+        <span class="tt-title">${esc(selectedMatnas)}</span>
+        <span class="tt-sub">${acts.length} פעילויות</span>
+        <div class="view-toggle">
+          <button class="vbtn ${viewMode==='grid'?'active':''}" onclick="setView('grid')">לוח שעות</button>
+          <button class="vbtn ${viewMode==='list'?'active':''}" onclick="setView('list')">רשימה</button>
+        </div>
+      </div>
+      <div id="viewArea"></div>
+      ${noT.length ? `<div class="no-time-wrap">
+        <h3>פעילויות ללא שעות קבועות (${noT.length})</h3>
+        <div class="nt-chips" id="ntChips"></div>
+      </div>` : ''}
+    </div>`;
+
+  if (noT.length) renderNoTime(noT);
+  viewMode === 'grid' ? renderGrid(withT) : renderListView(acts);
+}
+
+function setView(mode) { viewMode = mode; renderTimetable(); }
+
+// ═══════════════════════════════════════════════
+//  GRID VIEW
+// ═══════════════════════════════════════════════
+function renderGrid(withT) {
+  // Expand one entry per (activity, time-slot)
+  const byDay = {};
+  DAYS.forEach(d => byDay[d.idx] = []);
+  withT.forEach(act => act.times.forEach(slot => {
+    if (slot.day>=1 && slot.day<=6) byDay[slot.day].push({act, slot});
+  }));
+
+  const activeDays = DAYS.filter(d => byDay[d.idx].length > 0);
+  if (!activeDays.length) {
+    document.getElementById('viewArea').innerHTML =
+      '<div class="empty"><div class="empty-icon">📭</div><div>אין פעילויות עם שעות קבועות</div></div>';
+    return;
+  }
+
+  // Hour lines
+  const hourLines = Array.from({length: MAX_H - MIN_H + 1}, (_,i) =>
+    `<div class="h-line ${i%1===0?'h-line-major':''}" style="top:${i*HOUR_H}px"></div>`
+  ).join('');
+
+  // Time axis cells
+  const timeCells = Array.from({length: MAX_H - MIN_H + 1}, (_,i) =>
+    `<div class="t-slot">${(MIN_H+i).toString().padStart(2,'0')}:00</div>`
+  ).join('');
+
+  // Day columns
+  const dayCols = activeDays.map(d => {
+    const slots = layoutDay(byDay[d.idx]);
+    const cards = slots.map(({act, slot, col, numCols}) => {
+      const y = toY(slot.from);
+      const h = durH(slot.from, slot.to);
+      if (y < 0 || y > GRID_H) return '';
+      const wPct  = 100 / numCols;
+      const lPct  = col * wPct;
+      const bg = color(act.category);
+      const av = act.available;
+      const spotsIcon = av===0 ? '🔴' : (av!=='' && typeof act.total==='number' && act.total>0 && av/act.total<0.25) ? '🟡' : '';
+      return `<div class="ac" data-code="${esc(act.code)}"
+        style="top:${y.toFixed(1)}px;height:${h.toFixed(1)}px;background:${bg};left:${(lPct+0.5).toFixed(1)}%;width:${(wPct-1).toFixed(1)}%"
+        onclick="showDetail('${esc(act.code)}')"
+        title="${esc(act.name)} — ${slot.from}–${slot.to}${av!==''?' | '+av+' מקומות':''}">
+        <div class="ac-name">${esc(act.name)}</div>
+        <div class="ac-time">${slot.from}–${slot.to}</div>
+        ${h>=44 && av!=='' ? `<div class="ac-spots">${spotsIcon} ${av} 🪑</div>` : ''}
+      </div>`;
+    }).join('');
+
+    return `<div class="day-col">
+      <div class="day-head">
+        <div class="day-name">${d.name}</div>
+        <div class="day-cnt">${byDay[d.idx].length} פעילויות</div>
+      </div>
+      <div class="day-body">${hourLines}${cards}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('viewArea').innerHTML = `
+    <div class="grid-scroll">
+      <div class="grid-wrap">
+        <div class="time-axis">
+          <div class="time-axis-head"></div>
+          ${timeCells}
+        </div>
+        <div class="days-area">${dayCols}</div>
+      </div>
+    </div>`;
+}
+
+function layoutDay(entries) {
+  // Sort by start, then longest first
+  const sorted = [...entries].sort((a,b) => {
+    const d = toMin(a.slot.from) - toMin(b.slot.from);
+    return d !== 0 ? d : toMin(b.slot.to) - toMin(a.slot.to);
+  });
+
+  // Assign columns (greedy interval graph coloring)
+  const cols = []; // cols[i] = end-time of last entry placed in column i
+  sorted.forEach(e => {
+    const start = toMin(e.slot.from || '00:00');
+    let placed = false;
+    for (let i = 0; i < cols.length; i++) {
+      if (cols[i] <= start) {
+        e.col = i;
+        cols[i] = toMin(e.slot.to || '23:59');
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      e.col = cols.length;
+      cols.push(toMin(e.slot.to || '23:59'));
+    }
+  });
+
+  const numCols = cols.length || 1;
+  sorted.forEach(e => e.numCols = numCols);
+  return sorted;
+}
+
+// ═══════════════════════════════════════════════
+//  LIST VIEW
+// ═══════════════════════════════════════════════
+function renderListView(acts) {
+  const byDay = {};
+  DAYS.forEach(d => byDay[d.idx] = []);
+  acts.forEach(act => {
+    if (!act.times || !act.times.length) return;
+    act.times.forEach(slot => {
+      if (slot.day>=1 && slot.day<=6) byDay[slot.day].push({act, slot});
+    });
+  });
+
+  const activeDays = DAYS.filter(d => byDay[d.idx].length > 0);
+  if (!activeDays.length) {
+    document.getElementById('viewArea').innerHTML =
+      '<div class="empty"><div class="empty-icon">📭</div></div>';
+    return;
+  }
+
+  document.getElementById('viewArea').innerHTML = activeDays.map(d => {
+    const items = [...byDay[d.idx]].sort((a,b) => toMin(a.slot.from) - toMin(b.slot.from));
+    return `<div class="day-section">
+      <h3>${d.name} — ${items.length} פעילויות</h3>
+      <div class="list-cards">${items.map(({act,slot}) => listCard(act, slot)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function listCard(act, slot) {
+  const c = color(act.category);
+  return `<div class="lcard" style="border-right-color:${c}" onclick="showDetail('${esc(act.code)}')">
+    <div class="lcard-name">${esc(act.name)}</div>
+    ${act.category?`<div class="lcard-meta"><span class="cat-badge" style="background:${c};font-size:.65rem">${esc(act.category)}</span>${act.instructor?' · '+esc(act.instructor):''}</div>`:''}
+    ${slot?`<div class="lcard-meta">⏰ ${slot.from}–${slot.to}</div>`:''}
+    ${act.audience?`<div class="lcard-meta">👥 ${esc(act.audience)}</div>`:''}
+    <div class="lcard-foot">
+      ${spotsEl(act.available, act.total)}
+      <span class="lcard-price">${fmtPrice(act.price)}</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+//  NO-TIME SECTION
+// ═══════════════════════════════════════════════
+function renderNoTime(noT) {
+  const el = document.getElementById('ntChips');
+  if (!el) return;
+  el.innerHTML = noT.map(act => {
+    const c = color(act.category);
+    const pr = fmtPrice(act.price);
+    return `<div class="nt-chip" style="border-color:${c}40" onclick="showDetail('${esc(act.code)}')" title="${esc(act.category)}">
+      ${esc(act.name)}${pr?' · '+pr:''}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+//  SEARCH
+// ═══════════════════════════════════════════════
+document.getElementById('searchInput').addEventListener('input', function() {
+  const q = this.value.trim();
+  document.getElementById('clearBtn').style.display = q ? 'block' : 'none';
+  q ? renderSearch(q) : (selectedMatnas && renderTimetable());
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  if (selectedMatnas) renderTimetable();
+});
+
+function renderSearch(q) {
+  const ql = q.toLowerCase();
+  const results = ALL.filter(a =>
+    [a.name, a.matnas, a.category, a.instructor, a.details, a.audience]
+      .some(v => v && v.toLowerCase().includes(ql))
+  );
+
+  const main = document.getElementById('main');
+  if (!results.length) {
+    main.innerHTML = `<div class="search-outer"><div class="empty"><div class="empty-icon">🔍</div><div>אין תוצאות עבור "${esc(q)}"</div></div></div>`;
+    return;
+  }
+
+  const cards = results.map(act => {
+    const c = color(act.category);
+    const times = fmtTimes(act.times);
+    return `<div class="rcard" style="border-right-color:${c}" onclick="showDetail('${esc(act.code)}')">
+      <div class="rcard-body">
+        <div class="rc-name">${hl(act.name, q)}</div>
+        <div class="rc-matnas">📍 ${hl(act.matnas, q)}</div>
+        ${act.category?`<div class="rc-meta"><span class="cat-badge" style="background:${c}">${esc(act.category)}</span>${act.instructor?' · '+hl(act.instructor,q):''}</div>`:''}
+        ${times?`<div class="rc-meta">⏰ ${esc(times)}</div>`:''}
+        ${act.audience?`<div class="rc-meta">👥 ${esc(act.audience)}</div>`:''}
+        <div class="rc-foot">
+          ${spotsEl(act.available, act.total)}
+          <span class="rc-price">${fmtPrice(act.price)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  main.innerHTML = `<div class="search-outer">
+    <div class="search-heading">נמצאו ${results.length} תוצאות עבור "${esc(q)}"</div>
+    ${cards}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+//  DETAIL MODAL
+// ═══════════════════════════════════════════════
+function showDetail(code) {
+  const act = IDX[code];
+  if (!act) return;
+  currentDetailCode = code;
+  const c = color(act.category);
+
+  document.getElementById('dCat').textContent = act.category || '';
+  document.getElementById('dCat').style.background = c;
+  document.getElementById('dTitle').textContent = act.name;
+  document.getElementById('dMatnas').textContent = '📍 ' + act.matnas;
+
+  const times = fmtTimes(act.times);
+  const rows = [
+    times                  && ['⏰ שעות',    times],
+    act.instructor         && ['👤 מדריך',   act.instructor],
+    act.audience           && ['👥 קהל',     act.audience],
+    act.price !== ''       && ['💰 מחיר',    fmtPrice(act.price)],
+    act.available !== ''   && ['🪑 מקומות',  null], // rendered separately
+    act.start              && ['📅 עונה',    `${act.start} – ${act.end}`],
+    act.scope              && ['🏷 תחום',    act.scope],
+  ].filter(Boolean);
+
+  document.getElementById('dRows').innerHTML = rows.map(([label, val]) => {
+    if (label === '🪑 מקומות') {
+      return `<div class="d-row"><span class="d-label">${label}</span><span class="d-val">${spotsEl(act.available, act.total)}</span></div>`;
+    }
+    return `<div class="d-row"><span class="d-label">${label}</span><span class="d-val">${esc(String(val))}</span></div>`;
+  }).join('');
+
+  const detEl = document.getElementById('dDetails');
+  if (act.details) { detEl.textContent = act.details; detEl.style.display=''; }
+  else detEl.style.display='none';
+
+  const regBtn = document.getElementById('dReg');
+  regBtn.style.display = act.online_reg ? '' : 'none';
+
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeDetail(e) {
+  if (e && e.target !== document.getElementById('overlay')) return;
+  document.getElementById('overlay').classList.remove('open');
+  currentDetailCode = null;
+}
+
+function openReg() {
+  window.open('https://www5.tel-aviv.gov.il/TlvCommunity/activities/activities-list', '_blank');
+}
+
+// ═══════════════════════════════════════════════
+//  MAP
+// ═══════════════════════════════════════════════
+let leafletMap  = null;
+let mapMarkers  = {};   // code → L.CircleMarker
+let centersData = [];   // loaded from /api/centers
+let mapMode     = false;
+
+async function loadCenters() {
+  const res = await fetch('/api/centers');
+  centersData = await res.json();
+}
+
+function toggleMapMode() {
+  mapMode = !mapMode;
+  document.getElementById('mapToggle').classList.toggle('active', mapMode);
+  document.getElementById('mapWrap').classList.toggle('visible', mapMode);
+  document.getElementById('main').style.display = mapMode ? 'none' : '';
+  document.querySelector('.sidebar').style.display = mapMode ? 'none' : '';
+  if (mapMode) initMap();
+}
+
+function initMap() {
+  if (!centersData.length) return;
+
+  if (!leafletMap) {
+    leafletMap = L.map('mapContainer', {center: [32.075, 34.785], zoom: 13});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(leafletMap);
+  }
+
+  // Clear old markers
+  Object.values(mapMarkers).forEach(m => m.remove());
+  mapMarkers = {};
+
+  const maxCount = Math.max(...centersData.map(c => c.count), 1);
+
+  centersData.forEach(center => {
+    if (!center.lat || !center.lng) return;
+    const isSelected = center.name === selectedMatnas;
+    const ratio  = center.count / maxCount;
+    const radius = 10 + ratio * 18;          // 10–28 px
+    const fill   = isSelected ? '#ff6f00' :
+                   center.unknown ? '#90a4ae' :
+                   `hsl(${210 + (1-ratio)*40}, 80%, ${45 + ratio*10}%)`;
+
+    const marker = L.circleMarker([center.lat, center.lng], {
+      radius,
+      fillColor:   fill,
+      color:       isSelected ? '#bf360c' : '#fff',
+      weight:      isSelected ? 3 : 1.5,
+      fillOpacity: 0.88,
+    });
+
+    const popupHtml = `
+      <div class="popup-name">${center.name}</div>
+      <div class="popup-count">${center.count} פעילויות</div>
+      <button class="popup-btn" onclick="pickCenter('${center.name.replace(/'/g,"\\'")}')">
+        צפה בלוח השעות ←
+      </button>`;
+
+    marker.bindPopup(popupHtml, {closeButton: false, maxWidth: 220});
+    marker.on('click', () => marker.openPopup());
+    marker.addTo(leafletMap);
+    mapMarkers[center.code] = marker;
+  });
+
+  // Invalidate size in case the container was hidden during init
+  setTimeout(() => leafletMap.invalidateSize(), 50);
+}
+
+function pickCenter(name) {
+  // Close map mode, select the matnas
+  mapMode = false;
+  document.getElementById('mapToggle').classList.remove('active');
+  document.getElementById('mapWrap').classList.remove('visible');
+  document.getElementById('main').style.display = '';
+  document.querySelector('.sidebar').style.display = '';
+  selectMatnas(name);
+}
+
+// ═══════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════
+init().then(() => loadCenters());
+</script>
+</body>
+</html>

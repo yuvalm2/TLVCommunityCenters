@@ -1,0 +1,16 @@
+# Generated output — snapshots, diffs, CSVs
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Debug artifacts
+debug_page.html
+
+# OS
+.DS_Store
+Thumbs.db
