@@ -32,7 +32,7 @@ HEADERS = {
 
 # ---- CACHE (1 hour) ----
 _cache: dict = {"data": None, "ts": 0.0}
-CACHE_TTL = 3600
+CACHE_TTL = 3600  # seconds — change to 1800 for 30-min refresh
 
 
 async def _fetch() -> dict:
@@ -167,6 +167,25 @@ def centers():
 @app.route("/api/activities")
 def activities():
     return jsonify(get_activities())
+
+
+@app.route("/api/cache-info")
+def cache_info():
+    return jsonify({
+        "fetched_at": _cache["ts"],
+        "count": len(_cache["data"]) if _cache["data"] else 0,
+        "cache_ttl": CACHE_TTL,
+    })
+
+
+@app.route("/api/refresh", methods=["POST"])
+def refresh():
+    _cache["ts"] = 0.0   # expire the cache
+    data = get_activities()  # re-fetch immediately
+    return jsonify({
+        "fetched_at": _cache["ts"],
+        "count": len(data),
+    })
 
 
 if __name__ == "__main__":

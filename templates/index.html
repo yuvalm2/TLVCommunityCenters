@@ -19,9 +19,23 @@ body{font-family:system-ui,'Segoe UI',Arial,sans-serif;background:#f0f2f5;color:
 .search-wrap input:focus{background:rgba(255,255,255,.28)}
 .s-icon{position:absolute;right:12px;opacity:.7;pointer-events:none;font-size:1rem}
 .s-clear{position:absolute;left:10px;background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:1rem;display:none;line-height:1;padding:4px}
+.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .topbar-stat{font-size:.78rem;opacity:.65;white-space:nowrap}
+.refresh-btn{background:none;border:none;color:#fff;cursor:pointer;font-size:1.1rem;opacity:.75;padding:4px 6px;border-radius:6px;transition:opacity .15s,background .15s;line-height:1}
+.refresh-btn:hover{opacity:1;background:rgba(255,255,255,.15)}
+.refresh-btn.spinning{animation:spin 1s linear infinite;opacity:1}
 .map-btn{padding:6px 14px;border:1.5px solid rgba(255,255,255,.6);border-radius:20px;background:none;cursor:pointer;font-size:.82rem;color:#fff;font-weight:700;white-space:nowrap;transition:background .15s}
 .map-btn:hover,.map-btn.active{background:rgba(255,255,255,.2);border-color:#fff}
+/* ── WATCHLIST ── */
+.watch-item{background:#fffde7;border-bottom:1px solid #fff9c4}
+.watch-item:hover{background:#fff9c4!important}
+.watch-item.active{background:#f57f17!important;color:#fff}
+.watch-item.active .badge{background:rgba(255,255,255,.3)}
+.star-btn{background:none;border:none;cursor:pointer;font-size:.95rem;line-height:1;padding:2px 4px;opacity:.4;transition:opacity .15s,transform .15s;flex-shrink:0}
+.star-btn:hover,.star-btn.on{opacity:1}
+.star-btn.on{transform:scale(1.15)}
+.wl-empty{text-align:center;padding:40px 16px;color:#bbb;font-size:.85rem}
+.wl-empty-icon{font-size:2.5rem;margin-bottom:8px}
 
 /* ── MAP ── */
 #mapWrap{flex:1;display:none;flex-direction:column;overflow:hidden}
@@ -165,8 +179,11 @@ mark{background:#fff176;border-radius:2px;padding:0 1px}
     <input type="text" id="searchInput" placeholder="חיפוש לפי שם שיעור, מדריך, קטגוריה..." autocomplete="off" spellcheck="false">
     <button class="s-clear" id="clearBtn" title="נקה חיפוש">✕</button>
   </div>
-  <button class="map-btn" id="mapToggle" onclick="toggleMapMode()">🗺 מפה</button>
-  <span class="topbar-stat" id="stat">טוען...</span>
+  <div class="topbar-right">
+    <button class="map-btn" id="mapToggle" onclick="toggleMapMode()">🗺 מפה</button>
+    <button class="refresh-btn" id="refreshBtn" onclick="doRefresh()" title="רענן נתונים">⟳</button>
+    <span class="topbar-stat" id="stat">טוען...</span>
+  </div>
 </div>
 
 <div class="app">
@@ -175,6 +192,13 @@ mark{background:#fff176;border-radius:2px;padding:0 1px}
     <div class="sidebar-head" id="sidebarHead">מתנסים</div>
     <div class="matnas-list" id="matnasList">
       <div class="loading" style="height:180px;font-size:.85rem"><div class="spinner"></div></div>
+    </div>
+    <!-- Watchlist pinned at bottom of sidebar -->
+    <div style="border-top:2px solid #fff9c4;flex-shrink:0">
+      <div class="matnas-item watch-item" id="watchlistTab" onclick="showWatchlist()">
+        <span class="m-name">⭐ רשימת מעקב</span>
+        <span class="badge" id="watchBadge" style="background:#fff9c4;color:#f57f17">0</span>
+      </div>
     </div>
   </aside>
 
@@ -198,7 +222,9 @@ mark{background:#fff176;border-radius:2px;padding:0 1px}
   <div class="detail" id="detail">
     <button class="d-close" onclick="closeDetail()">×</button>
     <div class="d-cat"><span class="cat-badge" id="dCat"></span></div>
-    <div class="d-title" id="dTitle"></div>
+    <div class="d-title" id="dTitle" style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <span id="dTitleText"></span><span id="dTitleStar"></span>
+    </div>
     <div class="d-matnas" id="dMatnas"></div>
     <div id="dRows"></div>
     <div class="d-details" id="dDetails" style="display:none"></div>
@@ -494,7 +520,9 @@ function renderListView(acts) {
 function listCard(act, slot) {
   const c = color(act.category);
   return `<div class="lcard" style="border-right-color:${c}" onclick="showDetail('${esc(act.code)}')">
-    <div class="lcard-name">${esc(act.name)}</div>
+    <div class="lcard-name" style="display:flex;justify-content:space-between;align-items:flex-start">
+      <span>${esc(act.name)}</span>${starBtn(act.code)}
+    </div>
     ${act.category?`<div class="lcard-meta"><span class="cat-badge" style="background:${c};font-size:.65rem">${esc(act.category)}</span>${act.instructor?' · '+esc(act.instructor):''}</div>`:''}
     ${slot?`<div class="lcard-meta">⏰ ${slot.from}–${slot.to}</div>`:''}
     ${act.audience?`<div class="lcard-meta">👥 ${esc(act.audience)}</div>`:''}
@@ -553,7 +581,9 @@ function renderSearch(q) {
     const times = fmtTimes(act.times);
     return `<div class="rcard" style="border-right-color:${c}" onclick="showDetail('${esc(act.code)}')">
       <div class="rcard-body">
-        <div class="rc-name">${hl(act.name, q)}</div>
+        <div class="rc-name" style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px">
+          <span>${hl(act.name, q)}</span>${starBtn(act.code)}
+        </div>
         <div class="rc-matnas">📍 ${hl(act.matnas, q)}</div>
         ${act.category?`<div class="rc-meta"><span class="cat-badge" style="background:${c}">${esc(act.category)}</span>${act.instructor?' · '+hl(act.instructor,q):''}</div>`:''}
         ${times?`<div class="rc-meta">⏰ ${esc(times)}</div>`:''}
@@ -583,7 +613,8 @@ function showDetail(code) {
 
   document.getElementById('dCat').textContent = act.category || '';
   document.getElementById('dCat').style.background = c;
-  document.getElementById('dTitle').textContent = act.name;
+  document.getElementById('dTitleText').textContent = act.name;
+  document.getElementById('dTitleStar').innerHTML = starBtn(act.code);
   document.getElementById('dMatnas').textContent = '📍 ' + act.matnas;
 
   const times = fmtTimes(act.times);
@@ -708,9 +739,140 @@ function pickCenter(name) {
 }
 
 // ═══════════════════════════════════════════════
+//  REFRESH
+// ═══════════════════════════════════════════════
+let lastFetchedAt = 0;
+
+async function doRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/refresh', {method: 'POST'});
+    const info = await res.json();
+    lastFetchedAt = info.fetched_at;
+    // Re-fetch activity list into ALL
+    const r2 = await fetch('/api/activities');
+    ALL = await r2.json();
+    ALL.forEach(a => IDX[a.code] = a);
+    updateStat();
+    buildSidebar();
+    if (selectedMatnas) renderTimetable();
+    // reload centers for map
+    loadCenters();
+  } finally {
+    btn.classList.remove('spinning');
+    btn.disabled = false;
+  }
+}
+
+function updateStat() {
+  const el = document.getElementById('stat');
+  if (!lastFetchedAt) { el.textContent = `${ALL.length} פעילויות`; return; }
+  const mins = Math.round((Date.now()/1000 - lastFetchedAt) / 60);
+  const ago  = mins < 1 ? 'עכשיו' : mins === 1 ? 'לפני דקה' : `לפני ${mins} דק׳`;
+  el.textContent = `${ALL.length} פעילויות · עודכן ${ago}`;
+}
+
+// Tick every minute to keep "X דק׳ ago" fresh
+setInterval(updateStat, 60_000);
+
+// ═══════════════════════════════════════════════
+//  WATCHLIST
+// ═══════════════════════════════════════════════
+const WL_KEY = 'matnas_watchlist';
+
+function wlLoad() {
+  try { return new Set(JSON.parse(localStorage.getItem(WL_KEY) || '[]')); }
+  catch { return new Set(); }
+}
+function wlSave(set) {
+  localStorage.setItem(WL_KEY, JSON.stringify([...set]));
+}
+
+let watchlist = wlLoad();
+
+function wlToggle(code) {
+  if (watchlist.has(code)) watchlist.delete(code);
+  else watchlist.add(code);
+  wlSave(watchlist);
+  updateWatchBadge();
+  // Refresh star buttons visible on screen
+  document.querySelectorAll(`.star-btn[data-code="${code}"]`).forEach(b => {
+    b.classList.toggle('on', watchlist.has(code));
+    b.title = watchlist.has(code) ? 'הסר ממעקב' : 'הוסף למעקב';
+  });
+  // If watchlist view is open, re-render
+  if (!selectedMatnas && !document.getElementById('searchInput').value) showWatchlist();
+}
+
+function updateWatchBadge() {
+  const badge = document.getElementById('watchBadge');
+  badge.textContent = watchlist.size;
+  badge.style.background = watchlist.size ? '#f57f17' : '#fff9c4';
+  badge.style.color = watchlist.size ? '#fff' : '#f57f17';
+}
+
+function starBtn(code) {
+  const on = watchlist.has(code);
+  return `<button class="star-btn ${on?'on':''}" data-code="${code}"
+    title="${on?'הסר ממעקב':'הוסף למעקב'}"
+    onclick="event.stopPropagation();wlToggle('${code}')">${on?'★':'☆'}</button>`;
+}
+
+function showWatchlist() {
+  selectedMatnas = null;
+  document.getElementById('searchInput').value = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  document.querySelectorAll('.matnas-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('watchlistTab').classList.add('active');
+
+  const acts = [...watchlist].map(c => IDX[c]).filter(Boolean);
+  const main = document.getElementById('main');
+
+  if (!acts.length) {
+    main.innerHTML = `<div class="search-outer"><div class="wl-empty">
+      <div class="wl-empty-icon">☆</div>
+      <div>רשימת המעקב ריקה</div>
+      <div style="margin-top:6px;font-size:.78rem">לחץ ☆ על שיעור כלשהו כדי להוסיפו</div>
+    </div></div>`;
+    return;
+  }
+
+  const cards = acts.map(act => {
+    const c = color(act.category);
+    const times = fmtTimes(act.times);
+    return `<div class="rcard" style="border-right-color:${c}" onclick="showDetail('${esc(act.code)}')">
+      <div class="rcard-body">
+        <div class="rc-name">${esc(act.name)} ${starBtn(act.code)}</div>
+        <div class="rc-matnas">📍 ${esc(act.matnas)}</div>
+        ${act.category?`<div class="rc-meta"><span class="cat-badge" style="background:${c}">${esc(act.category)}</span>${act.instructor?' · '+esc(act.instructor):''}</div>`:''}
+        ${times?`<div class="rc-meta">⏰ ${esc(times)}</div>`:''}
+        ${act.audience?`<div class="rc-meta">👥 ${esc(act.audience)}</div>`:''}
+        <div class="rc-foot">${spotsEl(act.available,act.total)}<span class="rc-price">${fmtPrice(act.price)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  main.innerHTML = `<div class="search-outer">
+    <div class="search-heading">⭐ רשימת מעקב — ${acts.length} שיעורים</div>
+    ${cards}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════════════
-init().then(() => loadCenters());
+init().then(async () => {
+  // Get cache timestamp from server
+  try {
+    const info = await fetch('/api/cache-info').then(r => r.json());
+    lastFetchedAt = info.fetched_at;
+    updateStat();
+  } catch {}
+  updateWatchBadge();
+  loadCenters();
+});
 </script>
 </body>
 </html>
