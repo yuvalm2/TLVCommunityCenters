@@ -36,6 +36,10 @@ API_URL = (
     "/_vti_bin/TlvSP2013PublicSite/TlvListUtils.svc/GetActivities/false/"
 )
 
+# TODO: Support Herzliya's Enzo community center (https://herzliya.smarticket.co.il/אנזו_-_המקום_לצעירים_בהרצליה)
+#   Uses the smarticket.co.il platform (different from Tel Aviv's municipality API — needs separate scraper).
+#   Deferred because it has barely any activities scheduled until summer ends (~September 2026).
+
 HEADERS = {
     "Accept": "application/json",
     "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",

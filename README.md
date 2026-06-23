@@ -274,6 +274,14 @@ $action = New-ScheduledTaskAction `
 
 ---
 
+## Future / TODO
+
+### Herzliya Enzo community center
+
+[Enzo](https://herzliya.smarticket.co.il/אנזו_-_המקום_לצעירים_בהרצליה) is a Herzliya community center that uses the **smarticket.co.il** platform — a completely different system from the Tel Aviv municipality API. Support is deferred until after summer 2026 when activities resume (~September). Will require a separate scraper.
+
+---
+
 ## Activity fields reference
 
 | Field | Description |
